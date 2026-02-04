@@ -1,8 +1,15 @@
 const { MongoClient, ObjectId } = require('mongodb');
 
-// Bilgileri .env'den çekiyoruz
 const uri = process.env.MONGO_URI;
-const client = new MongoClient(uri);
+let cachedClient = null;
+
+async function connectToDatabase() {
+    if (cachedClient) return cachedClient;
+    const client = new MongoClient(uri);
+    await client.connect();
+    cachedClient = client;
+    return client;
+}
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,7 +19,7 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        await client.connect();
+        const client = await connectToDatabase();
         const col = client.db('hasan_storage').collection('images');
 
         if (req.method === 'GET') {
@@ -21,16 +28,20 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            await col.insertOne({ url: req.body.url, date: new Date() });
+            const { url } = req.body;
+            await col.insertOne({ url, date: new Date() });
             return res.status(200).json({ ok: true });
         }
 
         if (req.method === 'DELETE') {
-            const { id } = req.query;
-            await col.deleteOne({ _id: new ObjectId(id) });
-            return res.status(200).json({ success: true });
+            const id = req.query.id || req.body.id;
+            if (!id) return res.status(400).json({ error: "ID bulunamadı" });
+
+            const result = await col.deleteOne({ _id: new ObjectId(id) });
+            return res.status(200).json({ success: result.deletedCount > 0 });
         }
     } catch (e) {
+        console.error("Hata:", e);
         return res.status(500).json({ error: e.message });
     }
 }
