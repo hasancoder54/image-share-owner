@@ -1,0 +1,13 @@
+{
+  "name": "hasan-img-depo",
+  "version": "1.0.0",
+  "description": "Hasan's Private Image Storage",
+  "main": "api/api.js",
+  "dependencies": {
+    "mongodb": "^6.3.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "node api/api.js"
+  }
+}
