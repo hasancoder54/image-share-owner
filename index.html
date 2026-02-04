@@ -17,14 +17,12 @@
 
         .glass { background: rgba(255, 255, 255, 0.01); backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.05); }
         
-        .img-card { position: relative; border-radius: 15px; overflow: hidden; background: #000; }
-        .img-card::after { content: ''; position: absolute; inset: 0; border: 1px solid transparent; background: linear-gradient(45deg, var(--neon), var(--neon-pink)) border-box; -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); mask-composite: exclude; opacity: 0.2; }
-        .img-card:hover::after { opacity: 1; }
+        .img-card { position: relative; border-radius: 15px; overflow: hidden; background: #000; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .img-card:hover { border-color: var(--neon); box-shadow: 0 0 20px rgba(0, 242, 255, 0.1); }
 
         .btn-neon { background: transparent; border: 1px solid var(--neon); color: var(--neon); text-transform: uppercase; letter-spacing: 2px; position: relative; overflow: hidden; }
         .btn-neon:hover { background: var(--neon); color: #000; box-shadow: 0 0 30px var(--neon); }
         
-        /* Arka plan animasyonu */
         .bg-glow { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 600px; background: radial-gradient(circle, rgba(0, 242, 255, 0.05) 0%, transparent 70%); z-index: -1; }
     </style>
 </head>
@@ -37,15 +35,15 @@
         <p class="text-[9px] tracking-[0.5em] text-zinc-500 mb-10 uppercase">Secure Entry System</p>
         
         <div class="space-y-4">
-            <input type="text" id="username" placeholder="USERNAME" class="w-full p-4 bg-transparent neon-border text-sm outline-none">
-            <input type="password" id="password" placeholder="PASSWORD" class="w-full p-4 bg-transparent neon-border text-sm outline-none">
+            <input type="text" id="username" placeholder="USERNAME" class="w-full p-4 bg-transparent neon-border text-sm outline-none uppercase">
+            <input type="password" id="password" placeholder="PASSWORD" class="w-full p-4 bg-transparent neon-border text-sm outline-none uppercase">
             <button onclick="login()" class="w-full btn-neon py-4 rounded-lg font-bold text-xs">Sistemi Aktif Et</button>
         </div>
     </div>
 
     <div id="dashboard" class="hidden w-full max-w-7xl p-8 pt-24">
         <nav class="fixed top-0 left-0 w-full p-6 flex justify-between items-center z-50 glass border-b border-white/5">
-            <h2 class="text-xl font-bold neon-text italic">DEPOT.SYS</h2>
+            <h2 class="text-xl font-bold neon-text italic tracking-widest">DEPOT.SYS</h2>
             <div class="flex items-center gap-4">
                 <input type="file" id="fileInput" class="hidden" onchange="uploadImage(this.files[0])">
                 <button onclick="document.getElementById('fileInput').click()" id="uploadBtn" class="btn-neon px-6 py-2 rounded-md text-[10px] font-bold">
@@ -59,57 +57,88 @@
     </div>
 
     <script>
-        // ImgBB Key artık direkt kodda değil, Vercel'den de çekilebilir ama frontend'de kalabilir.
         const IMGBB_KEY = '2fe7db44ef101ea61577db747997365e';
 
         function login() {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
             
-            // Yeni bilgiler: Ferhat Usta / Kurtarici54321
             if(u === 'Ferhat Usta' && p === 'Kurtarici54321') {
                 document.getElementById('login-zone').style.display = 'none';
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.body.classList.remove('items-center', 'justify-center');
                 loadImages();
-            } else { alert('ERİŞİM ENGELLENDİ.'); }
+            } else { 
+                alert('ERİŞİM ENGELLENDİ. Bilgileri kontrol et.'); 
+            }
         }
 
         async function loadImages() {
-            const res = await fetch('/api/api');
-            const data = await res.json();
-            const gallery = document.getElementById('gallery');
-            gallery.innerHTML = '';
-            data.forEach(img => renderCard(img.url, img._id));
+            try {
+                const res = await fetch('/api/api');
+                const data = await res.json();
+                const gallery = document.getElementById('gallery');
+                gallery.innerHTML = '';
+                
+                if(data && data.length > 0) {
+                    data.forEach(img => renderCard(img.url, img._id));
+                } else {
+                    gallery.innerHTML = '<p class="col-span-full text-center text-zinc-600 text-[10px] tracking-widest">DEPODA HİÇ DOSYA YOK.</p>';
+                }
+            } catch (e) {
+                console.error("Yükleme hatası:", e);
+            }
         }
 
         async function uploadImage(file) {
             if(!file) return;
             const btn = document.getElementById('uploadBtn');
+            const originalText = btn.innerText;
             btn.innerText = "PROCESSING...";
             
             const fd = new FormData();
             fd.append('image', file);
 
             try {
+                // 1. ImgBB'ye yükle
                 const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: fd });
                 const d = await res.json();
+                
                 if(d.success) {
-                    await fetch('/api/api', {
+                    // 2. MongoDB'ye kaydet
+                    const dbRes = await fetch('/api/api', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: d.data.url })
                     });
-                    loadImages();
+                    
+                    if(dbRes.ok) loadImages();
                 }
-            } catch(e) { alert('UPLOAD ERROR'); }
-            finally { btn.innerText = "UPLOAD_FILE"; }
+            } catch(e) { 
+                alert('UPLOAD ERROR'); 
+            } finally { 
+                btn.innerText = originalText; 
+            }
         }
 
         async function deleteImage(id) {
-            if(!confirm('DELETE?')) return;
-            const res = await fetch(`/api/api?id=${id}`, { method: 'DELETE' });
-            if(res.ok) loadImages();
+            if(!confirm('DOSYA KALICI OLARAK SİLİNSİN Mİ?')) return;
+            
+            try {
+                const res = await fetch(`/api/api?id=${id}`, { 
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await res.json();
+                if(result.success || res.ok) {
+                    loadImages();
+                } else {
+                    alert('SİLME BAŞARISIZ.');
+                }
+            } catch(e) { 
+                alert('SERVER HATASI!'); 
+            }
         }
 
         function renderCard(url, id) {
@@ -117,11 +146,11 @@
             const div = document.createElement('div');
             div.className = "img-card group aspect-square relative";
             div.innerHTML = `
-                <img src="${url}" class="w-full h-full object-cover grayscale group-hover:grayscale-0 opacity-60 group-hover:opacity-100 transition-all duration-700">
+                <img src="${url}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all duration-700">
                 <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <div class="absolute bottom-4 left-4 right-4 flex justify-between items-center">
-                        <button onclick="window.open('${url}')" class="text-[8px] tracking-widest hover:text-[var(--neon)]">VIEW</button>
-                        <button onclick="deleteImage('${id}')" class="text-[8px] text-red-500 hover:neon-text">DELETE</button>
+                        <button onclick="window.open('${url}')" class="text-[8px] tracking-widest hover:text-[var(--neon)] uppercase">VIEW_FULL</button>
+                        <button onclick="deleteImage('${id}')" class="text-[8px] text-red-500 hover:text-white uppercase font-bold">DELETE_FILE</button>
                     </div>
                 </div>
             `;
