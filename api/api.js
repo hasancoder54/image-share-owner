@@ -1,7 +1,7 @@
 const { MongoClient } = require('mongodb');
 
 // MongoDB Bağlantı Linki (Kullanıcı: depolama, Şifre: Hasan12345)
-const uri = "mongodb+srv://depolama:Hasan12345@cluster0.mongodb.net/?retryWrites=true&w=majority"; 
+const uri = "mongodb+srv://depolama1:Hasan12345@cluster0.mongodb.net/?retryWrites=true&w=majority"; 
 const client = new MongoClient(uri);
 
 export default async function handler(req, res) {
@@ -44,4 +44,5 @@ export default async function handler(req, res) {
         // await client.close(); 
     }
 }
+
 
