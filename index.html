@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEPOT | Storage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;500;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.2s ease-in-out; }
+        body { background: #050505; color: #efefef; min-height: 100vh; margin: 0; }
+        .glass { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .img-card { position: relative; overflow: hidden; border-radius: 1.5rem; background: #111; }
+        .img-card img { width: 100%; height: 100%; object-cover; filter: grayscale(100%); transition: 0.5s; }
+        .img-card:hover img { filter: grayscale(0%); transform: scale(1.05); }
+        input { border-radius: 12px; }
+        /* Özel Kaydırma Çubuğu */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex items-center justify-center">
+
+    <div id="login-zone" class="w-full max-w-sm p-10 glass rounded-[2.5rem] shadow-2xl">
+        <div class="text-center mb-10">
+            <h2 class="text-4xl font-extrabold tracking-tighter mb-2">DEPOT</h2>
+            <p class="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Hasan Private Cloud</p>
+        </div>
+        <div class="space-y-4">
+            <input type="text" id="username" placeholder="Kullanıcı Adı" class="w-full bg-zinc-900/50 border border-zinc-800 p-4 outline-none focus:border-white text-sm">
+            <input type="password" id="password" placeholder="Şifre" class="w-full bg-zinc-900/50 border border-zinc-800 p-4 outline-none focus:border-white text-sm">
+            <button onclick="login()" class="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-zinc-200 active:scale-95">Sisteme Gir</button>
+        </div>
+    </div>
+
+    <div id="dashboard" class="hidden w-full max-w-7xl p-8 animate-in fade-in duration-700">
+        <header class="flex justify-between items-center mb-16">
+            <div>
+                <h1 class="text-5xl font-extrabold tracking-tighter italic">DEPOT.</h1>
+                <div id="status" class="text-[10px] text-zinc-500 mt-2 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> SİSTEM AKTİF
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <input type="file" id="fileInput" class="hidden" onchange="uploadImage(this.files[0])">
+                <button onclick="document.getElementById('fileInput').click()" id="uploadBtn" class="bg-zinc-100 text-black px-10 py-4 rounded-2xl font-bold text-sm hover:bg-white transition-all shadow-lg">
+                    + YENİ RESİM
+                </button>
+            </div>
+        </header>
+
+        <div id="gallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            </div>
+    </div>
+
+    <script>
+        const IMGBB_KEY = '2fe7db44ef101ea61577db747997365e';
+
+        // 1. GİRİŞ KONTROLÜ
+        function login() {
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+            
+            if(u === 'depolama' && p === 'Hasan12345') {
+                document.getElementById('login-zone').style.display = 'none';
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.body.classList.remove('items-center', 'justify-center');
+                loadImages(); // Geçmiş resimleri MongoDB'den çek
+            } else {
+                alert('Hatalı giriş, Hasan!');
+            }
+        }
+
+        // 2. MONGO DB'DEN ESKİLERİ ÇEKME
+        async function loadImages() {
+            try {
+                const res = await fetch('/api/api');
+                const images = await res.json();
+                const gallery = document.getElementById('gallery');
+                gallery.innerHTML = ''; 
+                
+                images.forEach(img => {
+                    renderCard(img.url);
+                });
+            } catch (err) {
+                console.error("Veriler alınamadı.");
+            }
+        }
+
+        // 3. YENİ RESİM YÜKLEME (ImgBB -> MongoDB)
+        async function uploadImage(file) {
+            if(!file) return;
+            const btn = document.getElementById('uploadBtn');
+            btn.innerText = "YÜKLENİYOR...";
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                // ImgBB Upload
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if(data.success) {
+                    const imgUrl = data.data.url;
+
+                    // MongoDB'ye Kaydet (Vercel API üzerinden)
+                    await fetch('/api/api', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: imgUrl })
+                    });
+
+                    renderCard(imgUrl);
+                }
+            } catch (err) {
+                alert("Yükleme hatası!");
+            } finally {
+                btn.innerText = "+ YENİ RESİM";
+                btn.disabled = false;
+            }
+        }
+
+        // 4. EKRANA KART EKLEME
+        function renderCard(url) {
+            const gallery = document.getElementById('gallery');
+            const div = document.createElement('div');
+            div.className = "img-card glass p-3 aspect-[4/5]";
+            div.innerHTML = `
+                <img src="${url}" class="rounded-xl h-[85%] object-cover cursor-pointer" onclick="window.open('${url}')">
+                <div class="mt-4 flex justify-between items-center px-2">
+                    <span class="text-[9px] text-zinc-600 tracking-widest uppercase">Saved Link</span>
+                    <button onclick="this.closest('.img-card').remove()" class="text-[9px] text-red-800 hover:text-red-500 font-bold uppercase transition">Kaldır</button>
+                </div>
+            `;
+            gallery.prepend(div);
+        }
+    </script>
+</body>
+</html>
